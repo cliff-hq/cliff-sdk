@@ -1,0 +1,63 @@
+{
+  "name": "multi-signal",
+  "description": "One request carrying two signals; nested rows, an epoch-millis time, and a row with no time (server stamps receive time).",
+  "request": {
+    "method": "POST",
+    "path": "/ingest/v1",
+    "headers": {
+      "Authorization": "Bearer ck_test_valid",
+      "Content-Type": "application/json",
+      "X-Cliff-SDK": "python/0.0.1",
+      "X-Cliff-Protocol": "0.0.1"
+    },
+    "body": {
+      "batch_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+      "sent_at": "2026-08-30T18:04:11.201Z",
+      "batches": [
+        {
+          "signal": "arm-1",
+          "rows": [
+            {
+              "time": 1788717850950,
+              "joints": {
+                "j1": {
+                  "pos": 1.21,
+                  "torque": 0.4
+                }
+              }
+            },
+            {
+              "time": 1788717851050,
+              "joints": {
+                "j1": {
+                  "pos": 1.24,
+                  "torque": 0.38
+                }
+              }
+            }
+          ]
+        },
+        {
+          "signal": "arm-1-camera",
+          "rows": [
+            {
+              "frame": [
+                12,
+                9,
+                3
+              ],
+              "exposure": null
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "accepted": 3,
+      "duplicate": false
+    }
+  }
+}

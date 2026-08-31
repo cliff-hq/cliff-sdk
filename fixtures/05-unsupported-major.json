@@ -1,0 +1,39 @@
+{
+  "name": "unsupported-major",
+  "description": "A wire major the server does not speak. The error names what it does speak; clients must not retry.",
+  "request": {
+    "method": "POST",
+    "path": "/ingest/v99",
+    "headers": {
+      "Authorization": "Bearer ck_test_valid",
+      "Content-Type": "application/json",
+      "X-Cliff-SDK": "python/0.0.1",
+      "X-Cliff-Protocol": "0.0.1"
+    },
+    "body": {
+      "batch_id": "3d6f0e2a-1b9c-4e7d-8a5f-6c2b9d4e1a7f",
+      "batches": [
+        {
+          "signal": "arm-1",
+          "rows": [
+            {
+              "gripper": 0.8
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 404,
+    "body": {
+      "error": {
+        "code": "unsupported_version",
+        "message": "this server speaks ingest v1",
+        "supported_majors": [
+          1
+        ]
+      }
+    }
+  }
+}

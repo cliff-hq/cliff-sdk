@@ -1,0 +1,38 @@
+{
+  "name": "duplicate-batch",
+  "description": "Replay of fixture 01's batch_id inside the dedupe window: the request is a no-op, acknowledged as a duplicate. This is the retry path being safe.",
+  "requires": [
+    "01-minimal"
+  ],
+  "request": {
+    "method": "POST",
+    "path": "/ingest/v1",
+    "headers": {
+      "Authorization": "Bearer ck_test_valid",
+      "Content-Type": "application/json",
+      "X-Cliff-SDK": "python/0.0.1",
+      "X-Cliff-Protocol": "0.0.1"
+    },
+    "body": {
+      "batch_id": "0f8fad5b-d9cb-469f-a165-70867728950e",
+      "batches": [
+        {
+          "signal": "arm-1",
+          "rows": [
+            {
+              "time": "2026-08-30T18:04:10.950Z",
+              "gripper": 0.8
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "accepted": 0,
+      "duplicate": true
+    }
+  }
+}

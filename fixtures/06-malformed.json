@@ -1,0 +1,44 @@
+{
+  "name": "malformed",
+  "description": "Same signal appearing twice in one request: rejected whole as malformed. Clients must not retry; the body will never become valid.",
+  "request": {
+    "method": "POST",
+    "path": "/ingest/v1",
+    "headers": {
+      "Authorization": "Bearer ck_test_valid",
+      "Content-Type": "application/json",
+      "X-Cliff-SDK": "python/0.0.1",
+      "X-Cliff-Protocol": "0.0.1"
+    },
+    "body": {
+      "batch_id": "5a1e8c3b-7d2f-4b6a-9e0c-4f8d2b6a1e3c",
+      "batches": [
+        {
+          "signal": "arm-1",
+          "rows": [
+            {
+              "gripper": 0.8
+            }
+          ]
+        },
+        {
+          "signal": "arm-1",
+          "rows": [
+            {
+              "gripper": 0.9
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": {
+        "code": "malformed",
+        "message": "signal 'arm-1' appears twice in one request"
+      }
+    }
+  }
+}

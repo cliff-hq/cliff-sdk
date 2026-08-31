@@ -1,0 +1,36 @@
+{
+  "name": "unauthorized",
+  "description": "Wrong token: refused with no detail beyond the code. Clients must not retry.",
+  "request": {
+    "method": "POST",
+    "path": "/ingest/v1",
+    "headers": {
+      "Authorization": "Bearer ck_test_wrong",
+      "Content-Type": "application/json",
+      "X-Cliff-SDK": "python/0.0.1",
+      "X-Cliff-Protocol": "0.0.1"
+    },
+    "body": {
+      "batch_id": "9b2b6f5e-8d1c-4b0a-9f3e-2a7d1c5e8b4a",
+      "batches": [
+        {
+          "signal": "arm-1",
+          "rows": [
+            {
+              "gripper": 0.8
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 401,
+    "body": {
+      "error": {
+        "code": "unauthorized",
+        "message": "invalid token"
+      }
+    }
+  }
+}
