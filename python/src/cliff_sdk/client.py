@@ -22,7 +22,7 @@ from collections import deque
 from datetime import datetime, timezone
 from typing import Callable, Optional, Union
 
-SDK_VERSION = "0.0.1"  # this client's own version; moves freely
+SDK_VERSION = "0.0.2"  # this client's own version; moves freely
 PROTOCOL_VERSION = "0.0.1"  # the spec revision this client implements
 WIRE_MAJOR = 1  # the /ingest/v{N} path major
 
@@ -39,6 +39,12 @@ __all__ = [
 # Statuses we retry (with the same batch_id, so a retry can never double-count).
 _RETRYABLE = {429, 500, 502, 503, 504}
 _BACKOFF_CAP = 30.0
+
+# The spec caps a request at 1 MiB; we chunk flushes to stay under it with room for the
+# envelope, because a server (or the load balancer in front of it) may hang up mid-upload on an
+# oversized body — which surfaces as a connection error, not a tidy 413. Learned from a 60-minute
+# backfill whose 5000-row batches of nested rows weighed ~1.5 MiB each.
+_BODY_BUDGET = 900_000
 
 
 class IngestError(Exception):
@@ -163,19 +169,35 @@ class Client:
                 dropped, self._dropped_since_flush = self._dropped_since_flush, 0
             else:
                 dropped = 0
-            rows = [self._buf.popleft() for _ in range(min(len(self._buf), self._max_batch_rows))]
+            rows = list(self._buf)
+            self._buf.clear()
             self._cond.notify_all()  # blocked producers may proceed
         if dropped:
             self._report(IngestError("overflow", "buffer full, oldest rows dropped", dropped))
         if not rows:
             return
 
+        # Split into requests bounded by BOTH row count and encoded size. Each chunk is its own
+        # request with its own batch_id; a retry replays a chunk, never the whole flush.
+        chunk: list = []
+        size = 0
+        for name, row in rows:
+            cost = len(json.dumps(row, separators=(",", ":")).encode()) + len(name.encode()) + 32
+            if chunk and (len(chunk) >= self._max_batch_rows or size + cost > _BODY_BUDGET):
+                self._send_chunk(chunk)
+                chunk, size = [], 0
+            chunk.append((name, row))
+            size += cost
+        if chunk:
+            self._send_chunk(chunk)
+
+    def _send_chunk(self, rows: list) -> None:
         # Group by signal, preserving per-signal order. Order across signals is irrelevant.
         by_signal: dict = {}
         for name, row in rows:
             by_signal.setdefault(name, []).append(row)
         body = {
-            "batch_id": str(uuid.uuid4()),  # one id per flush, reused verbatim across retries
+            "batch_id": str(uuid.uuid4()),  # one id per chunk, reused verbatim across retries
             "sent_at": _now_rfc3339(),
             "batches": [{"signal": s, "rows": rs} for s, rs in by_signal.items()],
         }

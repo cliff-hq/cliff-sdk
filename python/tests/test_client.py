@@ -134,6 +134,23 @@ class ClientTest(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             s.emit({"x": 1})
 
+    def test_oversized_flush_splits_by_bytes(self):
+        big = "x" * 10_000  # ~10 KB per row; 200 rows ≈ 2 MB, must split under the 1 MiB cap
+        c = self.client(flush_interval=5)
+        s = c.signal("arm-1")
+        for i in range(200):
+            s.emit({"i": i, "blob": big})
+        c.close()
+        self.assertGreater(len(self.server.requests), 1)
+        total = 0
+        for req in self.server.requests:
+            body = json.dumps(req["body"], separators=(",", ":")).encode()
+            self.assertLessEqual(len(body), 1 << 20)
+            total += sum(len(b["rows"]) for b in req["body"]["batches"])
+        self.assertEqual(total, 200)
+        ids = [r["body"]["batch_id"] for r in self.server.requests]
+        self.assertEqual(len(ids), len(set(ids)))  # each chunk its own batch_id
+
 
 if __name__ == "__main__":
     unittest.main()
