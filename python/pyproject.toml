@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cliff-sdk"
-version = "0.0.1"
+version = "0.0.3"
 description = "Push signals into Cliff: the official Python SDK for the Cliff ingest protocol"
 readme = "README.md"
 requires-python = ">=3.9"

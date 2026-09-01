@@ -26,8 +26,21 @@ This SDK versions independently of the protocol and declares what it implements:
 
 | constant | value | meaning |
 |---|---|---|
-| `cliff_sdk.SDK_VERSION` | 0.0.1 | this client |
-| `cliff_sdk.PROTOCOL_VERSION` | 0.0.1 | the spec revision implemented ([`PROTOCOL.md`](../PROTOCOL.md)) |
+| `cliff_sdk.SDK_VERSION` | 0.0.3 | this client |
+| `cliff_sdk.PROTOCOL_VERSION` | 0.0.3 | the spec revision implemented ([`PROTOCOL.md`](../PROTOCOL.md)) |
 | `cliff_sdk.WIRE_MAJOR` | 1 | the `/ingest/v{N}` path major spoken |
+
+## Episodes and labels
+
+```python
+with c.open_episode("test-rig-7", meta={"build": "rev-14"}) as ep:
+    c.signal("test-rig-7").emit({"thrust_n": 412.5}, episode=ep)
+# closed on exit; opens are idempotent by client-minted id, first close wins
+
+c.put_label(start="2026-09-01T05:10:00Z", end="2026-09-01T05:42:00Z",
+            signal="arm-1", source="cliff-cmms", kind="work-order", ref="wo:4812",
+            properties={"status": "closed", "cause": "bearing wear"})
+# idempotent by (source, ref): re-syncing a revised record is always safe
+```
 
 Tests: `python -m unittest discover -s tests` (stdlib only).

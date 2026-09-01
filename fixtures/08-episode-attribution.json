@@ -1,0 +1,26 @@
+{
+  "name": "episode-attribution",
+  "description": "Rows attributed to an open episode via the envelope's episode field. Attribution is batch-granular; an unknown episode id is malformed.",
+  "requires": ["07-episode-open"],
+  "request": {
+    "method": "POST",
+    "path": "/ingest/v1",
+    "headers": {
+      "Authorization": "Bearer ck_test_valid",
+      "Content-Type": "application/json",
+      "X-Cliff-SDK": "python/0.0.3",
+      "X-Cliff-Protocol": "0.0.3"
+    },
+    "body": {
+      "batch_id": "c2a57bd8-3c6b-4a4f-9e2b-0d3e5f7a9b1c",
+      "episode": "b1946ac9-2b5a-4f3e-8f1a-9c2d4e6f8a0b",
+      "batches": [
+        { "signal": "test-rig-7", "rows": [ { "time": 1788584401000, "thrust_n": 412.5 } ] }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": { "accepted": 1, "duplicate": false }
+  }
+}

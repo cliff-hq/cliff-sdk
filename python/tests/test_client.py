@@ -29,12 +29,17 @@ class StubServer:
                     stub.requests.append(
                         {"path": self.path, "headers": dict(self.headers), "body": body}
                     )
-                    status, resp = (
-                        stub.script.pop(0)
-                        if stub.script
-                        else (200, {"accepted": sum(len(b["rows"]) for b in body["batches"]),
-                                    "duplicate": False})
-                    )
+                    if stub.script:
+                        status, resp = stub.script.pop(0)
+                    elif self.path.endswith("/episodes"):
+                        status, resp = 200, {"episode": body["id"], "opened_at": "x", "closed": False}
+                    elif self.path.endswith("/close"):
+                        status, resp = 200, {"closed_at": "x"}
+                    elif self.path.endswith("/labels"):
+                        status, resp = 200, {"accepted": len(body["labels"])}
+                    else:
+                        status, resp = 200, {"accepted": sum(len(b["rows"]) for b in body["batches"]),
+                                             "duplicate": False}
                 payload = json.dumps(resp).encode()
                 self.send_response(status)
                 self.send_header("Content-Type", "application/json")
@@ -54,7 +59,7 @@ class StubServer:
         self.httpd.server_close()
 
 
-class ClientTest(unittest.TestCase):
+class Harness(unittest.TestCase):
     def setUp(self):
         self.server = StubServer()
         self.errors = []
@@ -67,6 +72,8 @@ class ClientTest(unittest.TestCase):
         opts.setdefault("on_error", self.errors.append)
         return Client("ck_test_valid", self.server.endpoint, **opts)
 
+
+class ClientTest(Harness):
     def test_batches_group_by_signal_and_close_flushes(self):
         with self.client() as c:
             arm = c.signal("arm-1")
@@ -150,6 +157,69 @@ class ClientTest(unittest.TestCase):
         self.assertEqual(total, 200)
         ids = [r["body"]["batch_id"] for r in self.server.requests]
         self.assertEqual(len(ids), len(set(ids)))  # each chunk its own batch_id
+
+
+class EpisodeAndLabelTest(Harness):
+    def test_episode_open_is_idempotent_by_client_id(self):
+        self.server.script = [(500, {"error": {"code": "internal", "message": "boom"}})]
+        c = self.client()
+        ep = c.open_episode("test-rig-7", meta={"build": "rev-14"})
+        opens = [r for r in self.server.requests if r["path"].endswith("/episodes")]
+        self.assertEqual(len(opens), 2)  # the 500 was retried
+        self.assertEqual(opens[0]["body"]["id"], opens[1]["body"]["id"])  # same episode, not a twin
+        self.assertEqual(ep.id, opens[1]["body"]["id"])
+        c.close()
+
+    def test_rows_partition_by_episode(self):
+        c = self.client(flush_interval=5)
+        s = c.signal("arm-1")
+        a = c.open_episode("arm-1")
+        b = c.open_episode("arm-1")
+        s.emit({"n": 1}, episode=a)
+        s.emit({"n": 2}, episode=a)
+        s.emit({"n": 3}, episode=b)
+        s.emit({"n": 4})  # unattributed
+        c.close()
+        ingests = [r["body"] for r in self.server.requests if r["path"] == "/ingest/v1"]
+        eps = [(body.get("episode"), sum(len(x["rows"]) for x in body["batches"])) for body in ingests]
+        self.assertEqual(eps, [(a.id, 2), (b.id, 1), (None, 1)])
+
+    def test_episode_context_manager_closes(self):
+        c = self.client()
+        with c.open_episode("arm-1") as ep:
+            pass
+        closes = [r for r in self.server.requests if r["path"].endswith("/close")]
+        self.assertEqual(len(closes), 1)
+        self.assertIn(ep.id, closes[0]["path"])
+        c.close()
+
+    def test_put_label_shape_and_refusal(self):
+        c = self.client()
+        n = c.put_label(
+            start="2026-09-01T05:10:00Z",
+            end="2026-09-01T05:42:00Z",
+            signal="arm-1",
+            source="cliff-cmms",
+            kind="work-order",
+            ref="wo:4812",
+            properties={"status": "closed"},
+        )
+        req = [r for r in self.server.requests if r["path"].endswith("/labels")][0]
+        label = req["body"]["labels"][0]
+        self.assertEqual(label["subjects"], [{"signal": "arm-1"}])
+        self.assertEqual(
+            label["metadata"],
+            {"source": "cliff-cmms", "kind": "work-order", "ref": "wo:4812"},
+        )
+        self.assertEqual(label["properties"], {"status": "closed"})
+
+        self.server.script = [
+            (400, {"error": {"code": "malformed", "message": "labels need source+ref"}})
+        ]
+        with self.assertRaises(IngestError) as caught:
+            c.put_labels([{"start": "2026-09-01T05:10:00Z"}])
+        self.assertEqual(caught.exception.code, "malformed")
+        c.close()
 
 
 if __name__ == "__main__":

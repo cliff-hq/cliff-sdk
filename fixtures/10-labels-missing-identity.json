@@ -1,0 +1,28 @@
+{
+  "name": "labels-missing-identity",
+  "description": "A label without metadata.source+ref is refused on this endpoint: identity is what makes a connector's re-sync safe, so its absence is malformed, not a silent opt-out.",
+  "request": {
+    "method": "POST",
+    "path": "/ingest/v1/labels",
+    "headers": {
+      "Authorization": "Bearer ck_test_valid",
+      "Content-Type": "application/json",
+      "X-Cliff-SDK": "python/0.0.3",
+      "X-Cliff-Protocol": "0.0.3"
+    },
+    "body": {
+      "labels": [
+        {
+          "start": "2026-09-01T05:10:00Z",
+          "subjects": [ { "signal": "arm-1" } ],
+          "metadata": { "kind": "note" },
+          "properties": { "text": "looked fine to me" }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 400,
+    "body": { "error": { "code": "malformed", "message": "every label on this endpoint carries metadata.source and metadata.ref — that pair is what makes your re-sync safe" } }
+  }
+}

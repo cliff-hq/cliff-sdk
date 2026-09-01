@@ -1,0 +1,29 @@
+{
+  "name": "labels",
+  "description": "A connector writing one work-order label. Idempotent by (metadata.source, metadata.ref): replaying this request revises the same label, never duplicates. Subjects are signal names, auto-created like row ingest.",
+  "request": {
+    "method": "POST",
+    "path": "/ingest/v1/labels",
+    "headers": {
+      "Authorization": "Bearer ck_test_valid",
+      "Content-Type": "application/json",
+      "X-Cliff-SDK": "python/0.0.3",
+      "X-Cliff-Protocol": "0.0.3"
+    },
+    "body": {
+      "labels": [
+        {
+          "start": "2026-09-01T05:10:00Z",
+          "end": "2026-09-01T05:42:00Z",
+          "subjects": [ { "signal": "arm-1" } ],
+          "metadata": { "source": "cliff-cmms", "kind": "work-order", "ref": "wo:4812" },
+          "properties": { "status": "closed", "cause": "bearing wear" }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": { "accepted": 1 }
+  }
+}

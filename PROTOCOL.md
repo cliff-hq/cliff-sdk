@@ -1,11 +1,12 @@
 # Cliff Ingest Protocol
 
-**Spec version: 0.0.1** · **Wire major: v1** · Status: pre-release (0.x: anything may change)
+**Spec version: 0.0.3** · **Wire major: v1** · Status: pre-release (0.x: anything may change)
 
-The push-ingest contract for custom signal integrations into Cliff. Every official SDK, in every
+The push contract for custom signal integrations into Cliff. Every official SDK, in every
 language, is a thin client of this document. The protocol is deliberately small: a bearer token,
 a signal name, and rows. Everything else (schema, health, retention) is derived server-side from
-the data itself.
+the data itself. Two optional surfaces ride beside row ingest: **episodes** (declaring the runs
+of an episodic signal) and **labels** (annotation written by connector agents).
 
 ## Design invariants
 
@@ -127,6 +128,72 @@ which is what keeps every client's retry logic trivial.
 | 429  | `rate_limited` | Retry with the same `batch_id` after `Retry-After` seconds. |
 | 5xx  | `internal` | Retry with the same `batch_id`, jittered exponential backoff. |
 
+## Episodes (since 0.0.2)
+
+Some signals are runs, not streams: a test fires, a batch executes, an arm attempts a task.
+Episodes let the writer declare that structure explicitly — the server never infers a run.
+
+**Open** — `POST {endpoint}/ingest/v1/episodes`
+
+```json
+{ "signal": "test-rig-7", "id": "<uuid, optional>", "meta": {"build": "rev-14"}, "opened_at": "<RFC 3339, optional>" }
+```
+
+→ `{ "episode": "<uuid>", "opened_at": "…", "closed": false }`
+
+- `id` is client-minted for at-least-once safety: a retried open with the same id is the SAME
+  episode, and the response reports that episode's stored facts, not the request's. Omit it and
+  the server mints one (then a retried open is a twin — supply the id).
+- `opened_at` defaults to now; a harness that knows the run started earlier says so.
+- Opening an episode marks the signal episodic and auto-creates it like row ingest does.
+
+**Close** — `POST {endpoint}/ingest/v1/episodes/{id}/close` with optional `{"closed_at": "…"}`.
+Idempotent: the first close wins and a retry never moves history. The server never closes an
+episode itself — a crashed writer leaves a visibly stale open episode for a human, and the
+system does not guess that a run ended.
+
+**Attribution** — the row envelope takes an optional top-level `"episode": "<uuid>"`, applying
+to every row in that request (attribution is batch-granular; split requests to split
+attribution). The episode must exist for the tenant (`malformed` otherwise). Batches for a
+CLOSED episode are accepted: late data lands, history repair is sacred, nothing re-triggers.
+
+## Labels (since 0.0.3)
+
+Annotation over signals' time: the work order a CMMS connector syncs, the defect a quality
+agent files. Same token, same error envelope — a connector is an integration like any other.
+
+**Write** — `POST {endpoint}/ingest/v1/labels`
+
+```json
+{
+  "labels": [
+    {
+      "start": "2026-09-01T05:10:00Z",
+      "end": "2026-09-01T05:42:00Z",
+      "subjects": [ { "signal": "arm-1" } ],
+      "metadata": { "source": "cliff-cmms", "kind": "work-order", "ref": "wo:4812" },
+      "properties": { "status": "closed", "cause": "bearing wear" }
+    }
+  ]
+}
+```
+
+→ `{ "accepted": 1 }`
+
+- **`metadata.source` and `metadata.ref` are REQUIRED on this endpoint** and together are the
+  label's identity: writing the same (source, ref) again revises the label in place. This is
+  the whole idempotency story — no batch id, no ledger. A connector re-sync is always safe, and
+  a connector that cannot supply a stable ref should not be writing labels.
+- `subjects` are signal **names** (resolved and auto-created like row ingest), so an
+  integration never needs a UUID. `metadata.kind` names what the label is (`work-order`,
+  `defect`); everything else in `metadata` and all of `properties` is the producer's business —
+  the rows teach the per-kind shape.
+- `end` absent = still open (a work order not yet closed); `end` equal to `start` =
+  instantaneous. At most 500 labels per request; the request is accepted or rejected whole.
+
+Reading labels back (range intersection, metadata filters) is the workspace API's job, not this
+protocol's: integrations write.
+
 ## Client requirements
 
 An official SDK MUST:
@@ -149,4 +216,8 @@ contract may be added later as its own document; it will not change this one.
 
 ## Changelog
 
+- **0.0.3** (2026-09-01): labels — `POST /ingest/v1/labels`, identity-required annotation
+  writes for connector agents.
+- **0.0.2** (2026-08-31): episodes — open/close lifecycle and the envelope's `episode`
+  attribution. (Documented after shipping; the spec now leads again.)
 - **0.0.1** (2026-08-30): initial draft.
